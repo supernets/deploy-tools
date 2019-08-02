@@ -1,0 +1,45 @@
+#!/bin/sh
+set -xev
+
+ANOPE=$HOME/services
+BACKUP=$HOME/services.backup
+SOURCE=$HOME/services.source
+
+setup() {
+	git clone --depth 1 https://github.com/supernets/anope.git $SOURCE
+	cd $SOURCE && $SOURCE/Config -nointro -quick && make && make install
+	cd $HOME && rm -rf $SOURCE
+}
+
+deploy() {
+	setup
+	#todo: edit services.conf here
+}
+
+update() {
+	#todo: check & kill abduco watchdog process
+	[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
+	mkdir $BACKUP
+	cp $NAOPE/conf/services.conf $BACKUP && cp $ANOPE/data/anope.db $BACKUP
+	pkill -9 services
+	rm -rf $ANOPE
+	setup
+	mv $BACKUP/services.conf $ANOPE/conf/
+	mv $BACKUP/anope.db $ANOPE/data
+	$ANOPE/bin/services
+	watchdog
+}
+
+watchdog() {
+	if command -v abduco >/dev/null 2>&1; then
+		abduco -fnr ircdwatchdog     bash -c "while true; do [ ! -f $HOME/services/data/services.pid ] && $HOME/services/bin/services; sleep 15; done"
+	elif command -v screen >/dev/null 2>&1; then
+		screen -S   ircdwatchdog -dm bash -c "while true; do [ ! -f $HOME/services/data/services.pid ] && $HOME/services/bin/services; sleep 15; done"
+	else
+		echo "[!] - install abduco or screen"
+	fi
+}
+
+[ $1 = "deploy"   ] && deploy   && exit 1
+[ $1 = "update"   ] && update   && exit 1
+[ $1 = "watchdog" ] && watchdog && exit 1

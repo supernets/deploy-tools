@@ -1,0 +1,52 @@
+#!/bin/sh
+set -xev
+
+BACKUP=$HOME/unrealircd.backup
+SOURCE=$HOME/unrealircd.source
+UNREAL=$HOME/unrealircd
+
+setup() {
+	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
+	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install
+	cd $HOME && rm -rf $SOURCE && rm $UNREAL/conf/*.conf
+}
+
+deploy() {
+	setup
+	read -p "Link Name: " NAME
+	SID=$(cat /dev/urandom | tr -dc '0-9' | fold -w 256 | head -n 1 | head --bytes 1)$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 2 | head -n 1)
+	echo "[NOTE] - Your remote include should be in https://USERNAME:PASSWORD@HOSTNAME:PORT format"
+	read -p "Remote Include: " REMOTE
+	for item in aliases badwords except help ircd modules opers spamfilter; do echo $REMOTE/$item.conf >> $UNREAL/conf/unrealircd.conf; done
+	echo "me { name \"$NAME.supernets.org\"; info \"SuperNETs IRC Network\"; sid $SID; }" >> $UNREAL/conf/unrealircd.conf
+	SPKI=$($UNREAL/unrealircd spkifp | sed -n 5p)
+	echo -e "\nAdd the following line into the hub\'s links.conf file for this link:\n$SPKI"
+}
+
+update() {
+	#todo: check & kill abduco watchdog process
+	[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
+	mkdir $BACKUP
+	cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/ssl/server.*.pem $BACKUP
+	$UNREAL/unrealircd stop
+	rm -rf $UNREAL
+	setup
+	mv $BACKUP/unrealircd.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/ssl
+	rm -r $BACKUP
+	$UNREAL/unrealircd start
+	watchdog
+}
+
+watchdog() {
+	if command -v abduco >/dev/null 2>&1; then
+		abduco -fnr ircdwatchdog     bash -c "while true; do [ ! -f $HOME/unrealircd/data/unrealircd.pid ] && $HOME/unrealircd/unrealircd start; sleep 15; done"
+	elif command -v screen >/dev/null 2>&1; then
+		screen -S   ircdwatchdog -dm bash -c "while true; do [ ! -f $HOME/unrealircd/data/unrealircd.pid ] && $HOME/unrealircd/unrealircd start; sleep 15; done"
+	else
+		echo "[!] - install abduco or screen"
+	fi
+}
+
+[ $1 = "deploy"   ] && deploy   && exit 1
+[ $1 = "update"   ] && update   && exit 1
+[ $1 = "watchdog" ] && watchdog && exit 1

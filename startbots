@@ -1,0 +1,11 @@
+#!/bin/sh
+pkill -9 abduco && pkill -9 python
+cd $HOME/bots              && abduco -fnr FUCKYOU      python 5000.py         && sleep 1
+cd $HOME/bots/anythinggoes && abduco -fnr anythinggoes python anythinggoes.py && sleep 1
+cd $HOME/bots              && abduco -fnr cancer       python cancer.py       && sleep 1
+cd $HOME/bots/dickserv     && abduco -fnr dickserv     python dickserv.py     && sleep 1
+cd $HOME/bots/irccex/efnet && abduco -fnr irccex-efnet python irccex.py       && sleep 1
+cd $HOME/bots/irccex/super && abduco -fnr irccex-super python irccex.py       && sleep 1
+cd $HOME/bots              && abduco -fnr limitserv    python limitserv.py    && sleep 1
+cd $HOME/bots/scroll       && abduco -fnr scroll       python scroll.py       && sleep 1
+cd $HOME/bots              && abduco -fnr spiderweb    python spiderweb.py

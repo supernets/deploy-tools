@@ -1,0 +1,39 @@
+#!/bin/sh
+set -xev
+
+pacman -S certbot nginx-mainline
+echo "worker_processes auto;"
+echo "worker_cpu_affinity auto;"
+echo "error_log logs/error.log;"
+echo -e "\nevents {"
+echo -e "\tworker_connections 1024;"
+echo "}"
+echo "\nhttp {"
+echo -e "\tinclude mime.types;"
+echo -e "\tdefault_type application/octet-stream;"
+echo -e "\taccess_log off;"
+echo -e "\tsendfile on;"
+echo -e "\tserver_tokens off;"
+echo -e "\tserver {"
+echo -e "\t\tlisten PORT;"      #note: change port
+echo -e "\t\tlisten [::]:PORT;" #note: change port
+echo -e "\t\troot /home/supernets/www;"
+echo -e "\t\tserver_name localhost;"
+echo -e "\t\tcharset UTF-8;"
+echo -e "\t\t#satisfy all;"
+echo -e "\t\tallow 1.2.3.4; # Link 1" #note: add all ipv4/ipv6 links
+echo -e "\t\tallow 1.2.3.4; # Link 2"
+echo -e "\t\tallow 1.2.3.4; # Link 3"
+echo -e "\t\tallow 1.2.3.4; # Link 4"
+echo -e "\t\tallow 1.2.3.4; # Link 5"
+echo -e "\t\tdeny all;"
+echo -e "\t\tauth_basic \"Restricted\";"
+echo -e "\t\tauth_basic_user_file /home/supernets/www/.htpasswd;"
+echo -e "\t}"
+echo "}"
+git clone --depth 1 https://github.com/supernets/www $HOME/www
+certbot certonly --email admin@supernets.org --rsa-key-size 4096 --webroot -w $HOME/www/ -d supernets.org -d webchat.supernets.org -d www.supernets.org
+echo -e "[Unit]\nDescription=Lets Encrypt renewal\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/certbot renew -n -q --agree-tos --post-hook=\"systemctl reload nginx\"" > /etc/systemd/system/certbot.service
+echo -e "[Unit]\nDescription=Twice daily renewal of Let's Encrypts certificates\n\n[Timer]\nOnCalendar=0/12:00:00\nRandomizedDelaySec=1h\nPersistent=true\n\n[Install]\nWantedBy=timers.target" > /etc/systemd/system/certbot.timer
+systemctl enable certbot.timer && systemctl start certbot.timer
+systemctl enable nginx         && systemctl start nginx
