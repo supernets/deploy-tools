@@ -7,8 +7,7 @@ SOURCE=$HOME/services.source
 
 setup() {
 	git clone --depth 1 https://github.com/supernets/anope.git $SOURCE
-	cd $SOURCE && $SOURCE/Config -nointro -quick && make && make install
-	cd $HOME && rm -rf $SOURCE
+	cd $SOURCE && $SOURCE/Config -nointro -quick && make && make install && cd $HOME && rm -rf $SOURCE
 }
 
 deploy() {
@@ -17,8 +16,7 @@ deploy() {
 }
 
 update() {
-	#todo: check & kill abduco watchdog process
-	[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
+	[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit #todo: check & kill abduco watchdog process
 	mkdir $BACKUP
 	cp $NAOPE/conf/services.conf $BACKUP && cp $ANOPE/data/anope.db $BACKUP
 	pkill -9 services

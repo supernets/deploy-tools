@@ -1,7 +1,8 @@
 #!/bin/sh
 set -xev
-
 pacman -S certbot nginx-mainline
+htpasswd -c /home/irc/public_html/conf/.htpasswd restricted
+certbot --nginx -d hub.supernets.org
 echo "worker_processes auto;"
 echo "worker_cpu_affinity auto;"
 echo "error_log logs/error.log;"
@@ -15,10 +16,10 @@ echo -e "\taccess_log off;"
 echo -e "\tsendfile on;"
 echo -e "\tserver_tokens off;"
 echo -e "\tserver {"
-echo -e "\t\tlisten PORT;"      #note: change port
-echo -e "\t\tlisten [::]:PORT;" #note: change port
+echo -e "\t\tlisten PORT ssl;"      #note: change port
+echo -e "\t\tlisten [::]:PORT ssl;" #note: change port
 echo -e "\t\troot /home/supernets/www;"
-echo -e "\t\tserver_name localhost;"
+echo -e "\t\tserver_name hub.supernets.org;"
 echo -e "\t\tcharset UTF-8;"
 echo -e "\t\t#satisfy all;"
 echo -e "\t\tallow 1.2.3.4; # Link 1" #note: add all ipv4/ipv6 links

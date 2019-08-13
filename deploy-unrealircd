@@ -1,37 +1,52 @@
 #!/bin/sh
 set -xev
 
-BACKUP=$HOME/unrealircd.backup
-SOURCE=$HOME/unrealircd.source
 UNREAL=$HOME/unrealircd
+BACKUP=$UNREAL.backup
+SOURCE=$UNREAL.source
 
-setup() {
-	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
-	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install
-	cd $HOME && rm -rf $SOURCE && rm $UNREAL/conf/*.conf
+get_latest() {
+	curl -s https://www.unrealircd.org/downloads/list.json | sed -e 's/[{}]/''/g' | awk -v RS=',"' -F: '/^version/ {print $2}' | sed 's/\(^"\|"$\)//g'
+}
+
+update_source() {
+	wget -O $SOURCE.tar.gz https://www.unrealircd.org/downloads/unrealircd-latest.tar.gz
+	tar -xvf $SOURCE.tar.gz --one-top-level --strip-components=1
+	rm $SOURCE.tar.gz
+	sed -i 's;//#undef FAKELAG_CONFIGURABLE;#define FAKELAG_CONFIGURABLE;g' $SOURCE/include/config.h
+	sed -i 's_\t\t\tsendnotice(acptr, "*** You were forced to join %s", jbuf);_\t\t\t//sendnotice(acptr, "*** You were forced to join %s", jbuf);_g' $SOURCE/src/modules/m_sapart.c
+	rm -r $SOURCE/doc/conf/aliases $SOURCE/doc/conf/examples $SOURCE/doc/conf/help
+	rm -r $SOURCE/doc/conf/*.conf
+	cp $HOME/dev/git/supernets/unrealircd/doc/conf/*.conf $SOURCE/doc/conf/
+	cp $HOME/dev/git/supernets/unrealircd/src/ssl.cnf $SOURCE/src/ssl.cnf
 }
 
 deploy() {
-	setup
+	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
+	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install && cd $HOME && rm -rf $SOURCE
+	rm $UNREAL/conf/*.conf
 	read -p "Link Name: " NAME
 	SID=$(cat /dev/urandom | tr -dc '0-9' | fold -w 256 | head -n 1 | head --bytes 1)$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 2 | head -n 1)
-	echo "[NOTE] - Your remote include should be in https://USERNAME:PASSWORD@HOSTNAME:PORT format"
+	echo "[NOTE] - Your remote include should be in http(s)://USERNAME:PASSWORD@HOSTNAME:PORT format"
 	read -p "Remote Include: " REMOTE
 	for item in aliases badwords except help ircd modules opers spamfilter; do echo $REMOTE/$item.conf >> $UNREAL/conf/unrealircd.conf; done
 	echo "me { name \"$NAME.supernets.org\"; info \"SuperNETs IRC Network\"; sid $SID; }" >> $UNREAL/conf/unrealircd.conf
 	SPKI=$($UNREAL/unrealircd spkifp | sed -n 5p)
 	echo -e "\nAdd the following line into the hub\'s links.conf file for this link:\n$SPKI"
+	$UNREAL/unrealircd start &
 }
 
 update() {
-	#todo: check & kill abduco watchdog process
 	[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
+	[ ! -z $(abduco     | grep ircdwatchdog) ] && pkill -9 $(abduco | grep ircdwatchdog | awk '{print $4}')
 	mkdir $BACKUP
 	cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/ssl/server.*.pem $BACKUP
+	#cp $UNREAL/conf/links.conf $BACKUP && cp $UNREAL/conf/modules.conf $BACKUP && cp $UNREAL/conf/opers.conf $BACKUP
 	$UNREAL/unrealircd stop
 	rm -rf $UNREAL
-	setup
-	mv $BACKUP/unrealircd.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/ssl
+	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
+	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install && cd $HOME && rm -rf $SOURCE
+	mv $BACKUP/*.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/ssl
 	rm -r $BACKUP
 	$UNREAL/unrealircd start
 	watchdog
