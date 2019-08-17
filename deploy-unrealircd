@@ -5,20 +5,23 @@ UNREAL=$HOME/unrealircd
 BACKUP=$UNREAL.backup
 SOURCE=$UNREAL.source
 
-get_latest() {
-	curl -s https://www.unrealircd.org/downloads/list.json | sed -e 's/[{}]/''/g' | awk -v RS=',"' -F: '/^version/ {print $2}' | sed 's/\(^"\|"$\)//g'
-}
+#LATEST=$(curl -s https://www.unrealircd.org/downloads/list.json | sed -e 's/[{}]/''/g' | awk -v RS=',"' -F: '/^version/ {print $2}' | sed 's/\(^"\|"$\)//g')
 
 update_source() {
 	wget -O $SOURCE.tar.gz https://www.unrealircd.org/downloads/unrealircd-latest.tar.gz
 	tar -xvf $SOURCE.tar.gz --one-top-level --strip-components=1
 	rm $SOURCE.tar.gz
+	sed -i 's/NICKNAMEHISTORYLENGTH="2000"/NICKNAMEHISTORYLENGTH="100"/g' $SOURCE/Config
+	sed -i 's/REMOTEINC=""/REMOTEINC="1"/g' $SOURCE/Config
+	sed -i 's/PREFIXAQ="1"/PREFIXAQ="0"/g' $SOURCE/Config
+	sed -i 's/SHOWLISTMODES="1"/SHOWLISTMODES="0"/g' $SOURCE/Config
 	sed -i 's;//#undef FAKELAG_CONFIGURABLE;#define FAKELAG_CONFIGURABLE;g' $SOURCE/include/config.h
 	sed -i 's_\t\t\tsendnotice(acptr, "*** You were forced to join %s", jbuf);_\t\t\t//sendnotice(acptr, "*** You were forced to join %s", jbuf);_g' $SOURCE/src/modules/m_sapart.c
 	rm -r $SOURCE/doc/conf/aliases $SOURCE/doc/conf/examples $SOURCE/doc/conf/help
 	rm -r $SOURCE/doc/conf/*.conf
 	cp $HOME/dev/git/supernets/unrealircd/doc/conf/*.conf $SOURCE/doc/conf/
 	cp $HOME/dev/git/supernets/unrealircd/src/ssl.cnf $SOURCE/src/ssl.cnf
+	echo "edit your Makefile.in"
 }
 
 deploy() {
