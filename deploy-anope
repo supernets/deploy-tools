@@ -1,18 +1,19 @@
 #!/bin/sh
 set -xev
 
+CURRENT='2.0.6'
 ANOPE=$HOME/services
 BACKUP=$HOME/services.backup
 SOURCE=$HOME/services.source
 
-setup() {
-	git clone --depth 1 https://github.com/supernets/anope.git $SOURCE
-	cd $SOURCE && $SOURCE/Config -nointro -quick && make && make install && cd $HOME && rm -rf $SOURCE
-}
-
 deploy() {
 	setup
 	#todo: edit services.conf here
+}
+
+setup() {
+	git clone --depth 1 https://github.com/supernets/anope.git $SOURCE
+	cd $SOURCE && $SOURCE/Config -nointro -quick && make && make install && cd $HOME && rm -rf $SOURCE
 }
 
 update() {
@@ -33,8 +34,6 @@ watchdog() {
 		abduco -fnr ircdwatchdog     bash -c "while true; do [ ! -f $HOME/services/data/services.pid ] && $HOME/services/bin/services; sleep 15; done"
 	elif command -v screen >/dev/null 2>&1; then
 		screen -S   ircdwatchdog -dm bash -c "while true; do [ ! -f $HOME/services/data/services.pid ] && $HOME/services/bin/services; sleep 15; done"
-	else
-		echo "[!] - install abduco or screen"
 	fi
 }
 

@@ -17,10 +17,10 @@ get() {
 	wget -O $HOME/bots/5000.py https://raw.githubusercontent.com/acidvegas/trollbots/master/5000.py
 	mkdir -P $HOME/bots/anythinggoes/data
 	wget -O $HOME/bots/anythinggoes/anythinggoes.py https://github.com/acidvegas/random/blob/master/irc/anythinggoes/anythinggoes.py
-	wget -O $HOME/bots/anythinggoes/anythinggoes.py https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/banana.txt
-	wget -O $HOME/bots/anythinggoes/anythinggoes.py https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/crab.txt
-	wget -O $HOME/bots/anythinggoes/anythinggoes.py https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/crate.txt
-	wget -O $HOME/bots/anythinggoes/anythinggoes.py https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/worms.txt
+	wget -O $HOME/bots/anythinggoes/data/banana.txt https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/banana.txt
+	wget -O $HOME/bots/anythinggoes/data/crab.txt https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/crab.txt
+	wget -O $HOME/bots/anythinggoes/data/crate.txt https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/crate.txt
+	wget -O $HOME/bots/anythinggoes/data/worms.txt https://github.com/acidvegas/random/blob/master/irc/anythinggoes/data/worms.txt
 	wget -O $HOME/bots/cancer.py https://raw.githubusercontent.com/acidvegas/random/master/irc/cancer.py
 	git clone --depth 1 https://github.com/acidvegas/dickserv.git $HOME/bots/dickserv
 	mkdir $HOME/bots/irccex
@@ -32,3 +32,6 @@ get() {
 	git clone --depth 1 https://github.com/ircart/ircart.git $HOME/bots/scroll/scroll/data/art
 	wget -O $HOME/bots/spiderweb.py https://raw.githubusercontent.com/acidvegas/trollbots/master/spiderweb.py
 }
+
+[ $1 = "start" ] && start && exit 1
+[ $1 = "get"   ] && get   && exit 1
