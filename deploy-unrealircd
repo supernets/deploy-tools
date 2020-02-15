@@ -1,7 +1,13 @@
 #!/bin/sh
-set -xev
 
-CURRENT='4.2.4.1'
+# ./unreal gencloak
+# gpg --keyserver keys.gnupg.net --recv-keys 0xA7A21B0A108FF4A9
+# wget https://www.unrealircd.org/downloads/unrealircd-5.0.0-alpha3.tar.gz.asc
+# gpg --verify unrealircd-5.0.0-alpha3.tar.gz.asc unrealircd-5.0.0-alpha3.tar.gz
+
+#set -xev
+
+CURRENT='5.0.3.1'
 BACKUP=$HOME/unrealircd.backup
 SOURCE=$HOME/unrealircd.source
 UNREAL=$HOME/unrealircd
@@ -12,7 +18,6 @@ deploy() {
 	rm $UNREAL/conf/*.conf
 	read -p "Link Name: " NAME
 	SID=$(cat /dev/urandom | tr -dc '0-9' | fold -w 256 | head -n 1 | head --bytes 1)$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 2 | head -n 1)
-	echo "[NOTE] - Your remote include should be in http(s)://USERNAME:PASSWORD@HOSTNAME:PORT format"
 	read -p "Remote Include: " REMOTE
 	for item in aliases badwords except help ircd modules opers spamfilter; do echo $REMOTE/$item.conf >> $UNREAL/conf/unrealircd.conf; done
 	echo "me { name \"$NAME.supernets.org\"; info \"SuperNETs IRC Network\"; sid $SID; }" >> $UNREAL/conf/unrealircd.conf
@@ -21,42 +26,41 @@ deploy() {
 	$UNREAL/unrealircd start &
 }
 
+#todo: fix this mess
 latest() {
 	local LATEST=$(curl -s https://www.unrealircd.org/downloads/list.json | sed -e 's/[{}]/''/g' | awk -v RS=',"' -F: '/^version/ {print $2}' | sed 's/\(^"\|"$\)//g')
-	[ $LATEST != $CURRENT ] && echo "new version available: $LATEST"
+	[ "$LATEST" != "$CURRENT" ] && echo "new version available: $LATEST"
 }
 
 update() {
-	[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
-	[ ! -z $(abduco     | grep ircdwatchdog) ] && pkill -9 $(abduco | grep ircdwatchdog | awk '{print $4}')
-	mkdir $BACKUP
-	cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/ssl/server.*.pem $BACKUP
-	#cp $UNREAL/conf/links.conf $BACKUP && cp $UNREAL/conf/modules.conf $BACKUP && cp $UNREAL/conf/opers.conf $BACKUP
-	$UNREAL/unrealircd stop
-	rm -rf $UNREAL
+	#[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
+	#[ ! -z $(abduco     | grep ircdwatchdog) ] && pkill -9 $(abduco | grep ircdwatchdog | awk '{print $4}')
+	mkdir $BACKUP && cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/tls/server.*.pem $BACKUP
+	$UNREAL/unrealircd stop && rm -rf $UNREAL
 	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
 	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install && cd $HOME && rm -rf $SOURCE
-	mv $BACKUP/*.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/ssl
-	rm -r $BACKUP
+	rm $UNREAL/conf/*.conf && mv $BACKUP/*.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/tls && rm -r $BACKUP
 	$UNREAL/unrealircd start
-	watchdog
+	#watchdog
 }
 
 update_source() {
 	wget -O $SOURCE.tar.gz https://www.unrealircd.org/downloads/unrealircd-latest.tar.gz
-	tar -xvf $SOURCE.tar.gz --one-top-level --strip-components=1
-	rm $SOURCE.tar.gz
+	tar -xvf $SOURCE.tar.gz --one-top-level --strip-components=1 && rm $SOURCE.tar.gz
 	sed -i 's/NICKNAMEHISTORYLENGTH="2000"/NICKNAMEHISTORYLENGTH="100"/g' $SOURCE/Config
 	sed -i 's/REMOTEINC=""/REMOTEINC="1"/g' $SOURCE/Config
 	sed -i 's/PREFIXAQ="1"/PREFIXAQ="0"/g' $SOURCE/Config
 	sed -i 's/SHOWLISTMODES="1"/SHOWLISTMODES="0"/g' $SOURCE/Config
+	sed -i 's_\t$(INSTALL) -m 0600 doc/conf/*.default.conf @CONFDIR@_$(INSTALL) -m 0600 doc/conf/*.conf @CONFDIR@_g' $SOURCE/Makefile.in
+	sed -i 's_\t$(INSTALL) -m 0600 doc/conf/*.optional.conf @CONFDIR@_$(INSTALL) -m 0600 doc/conf/*.motd @CONFDIR@_g' $SOURCE/Makefile.in
+	sed -i '177,192d' $SOURCE/Makefile.in          # https://github.com/unrealircd/unrealircd/blob/unreal50/Makefile.in          |
+	sed -i '279,296d' $SOURCE/src/modules/sajoin.c # https://github.com/unrealircd/unrealircd/blob/unreal50/src/modules/sajoin.c | Note: These line numbers may change with updates!
+	sed -i '162,177d' $SOURCE/src/modules/sapart.c # https://github.com/unrealircd/unrealircd/blob/unreal50/src/modules/sapart.c |
+	sed -i 's/0.organizationName_default      = IRC geeks/0.organizationName_default      = SuperNETs/g' $SOURCE/extras/tls.cnf
 	sed -i 's;//#undef FAKELAG_CONFIGURABLE;#define FAKELAG_CONFIGURABLE;g' $SOURCE/include/config.h
-	sed -i 's_\t\t\tsendnotice(acptr, "*** You were forced to join %s", jbuf);_\t\t\t//sendnotice(acptr, "*** You were forced to join %s", jbuf);_g' $SOURCE/src/modules/m_sapart.c
-	rm -r $SOURCE/doc/conf/aliases $SOURCE/doc/conf/examples $SOURCE/doc/conf/help
-	rm -r $SOURCE/doc/conf/*.conf
-	cp $HOME/dev/git/supernets/unrealircd/doc/conf/*.conf $SOURCE/doc/conf/
-	cp $HOME/dev/git/supernets/unrealircd/src/ssl.cnf $SOURCE/src/ssl.cnf
-	echo "edit your Makefile.in"
+	rm -r $SOURCE/doc/conf/aliases $SOURCE/doc/conf/examples *.conf
+	cp $HOME/dev/git/supernets/unrealircd/doc/conf/* $SOURCE/doc/conf/
+	cp $SOURCE/doc/conf/help/help.conf $SOURCE/doc/conf/help.conf && rm -r $SOURCE/doc/conf/help/
 }
 
 watchdog() {
