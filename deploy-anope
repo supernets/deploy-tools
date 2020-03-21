@@ -1,7 +1,6 @@
 #!/bin/sh
 set -xev
 
-CURRENT='2.0.6'
 ANOPE=$HOME/services
 BACKUP=$HOME/services.backup
 SOURCE=$HOME/services.source

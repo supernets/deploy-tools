@@ -1,40 +1,60 @@
 #!/bin/sh
 set -xev
-pacman -S certbot nginx-mainline
-htpasswd -c /home/irc/public_html/conf/.htpasswd restricted
-certbot --nginx -d hub.supernets.org
-echo "worker_processes auto;"
-echo "worker_cpu_affinity auto;"
-echo "error_log logs/error.log;"
-echo -e "\nevents {"
-echo -e "\tworker_connections 1024;"
-echo "}"
-echo "\nhttp {"
-echo -e "\tinclude mime.types;"
-echo -e "\tdefault_type application/octet-stream;"
-echo -e "\taccess_log off;"
-echo -e "\tsendfile on;"
-echo -e "\tserver_tokens off;"
-echo -e "\tserver {"
-echo -e "\t\tlisten PORT ssl;"      #note: change port
-echo -e "\t\tlisten [::]:PORT ssl;" #note: change port
-echo -e "\t\troot /home/supernets/www;"
-echo -e "\t\tserver_name hub.supernets.org;"
-echo -e "\t\tcharset UTF-8;"
-echo -e "\t\t#satisfy all;"
-echo -e "\t\tallow 1.2.3.4; # Link 1" #note: add all ipv4/ipv6 links
-echo -e "\t\tallow 1.2.3.4; # Link 2"
-echo -e "\t\tallow 1.2.3.4; # Link 3"
-echo -e "\t\tallow 1.2.3.4; # Link 4"
-echo -e "\t\tallow 1.2.3.4; # Link 5"
-echo -e "\t\tdeny all;"
-echo -e "\t\tauth_basic \"Restricted\";"
-echo -e "\t\tauth_basic_user_file /home/supernets/www/.htpasswd;"
-echo -e "\t}"
-echo "}"
-git clone --depth 1 https://github.com/supernets/www $HOME/www
-certbot certonly --email admin@supernets.org --rsa-key-size 4096 --webroot -w $HOME/www/ -d supernets.org -d webchat.supernets.org -d www.supernets.org
-echo -e "[Unit]\nDescription=Lets Encrypt renewal\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/certbot renew -n -q --agree-tos --post-hook=\"systemctl reload nginx\"" > /etc/systemd/system/certbot.service
-echo -e "[Unit]\nDescription=Twice daily renewal of Let's Encrypts certificates\n\n[Timer]\nOnCalendar=0/12:00:00\nRandomizedDelaySec=1h\nPersistent=true\n\n[Install]\nWantedBy=timers.target" > /etc/systemd/system/certbot.timer
-systemctl enable certbot.timer && systemctl start certbot.timer
-systemctl enable nginx         && systemctl start nginx
+
+HUB="hub.supernets.org" # change me
+USERNAME=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+PASSWORD=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+PORT="9999" # change me
+
+setup_home() {
+	mkdir /home/acidvegas/www
+	wget -O /home/acidvegas/www/badwords.conf   https://raw.githubusercontent.com/supernets/unrealircd/master/doc/conf/badwords.conf
+	wget -O /home/acidvegas/www/except.conf     https://raw.githubusercontent.com/supernets/unrealircd/master/doc/conf/except.conf
+	wget -O /home/acidvegas/www/ircd.conf       https://raw.githubusercontent.com/supernets/unrealircd/master/doc/conf/unrealircd.remote.conf # edit this
+	wget -O /home/acidvegas/www/modules.conf    https://raw.githubusercontent.com/supernets/unrealircd/master/doc/conf/modules.conf
+	wget -O /home/acidvegas/www/opers.conf      https://raw.githubusercontent.com/supernets/unrealircd/master/doc/conf/opers.conf             # edit this
+	wget -O /home/acidvegas/www/spamfilter.conf https://raw.githubusercontent.com/supernets/unrealircd/master/doc/conf/spamfilter.conf
+	chown acidvegas:acidvegas /home/acidvegas/www && chown acidvegas:acidvegas /home/acidvegas/www/* && chmod 755 /home/acidvegas/www/*.conf
+}
+
+setup_nginx() {
+	echo -e "error_log /dev/null;" > /etc/nginx/nginx.conf
+	echo -e "http {" >> /etc/nginx/nginx.conf
+	echo -e "\taccess_log off;" >> /etc/nginx/nginx.conf
+	echo -e "\tsendfile on;" >> /etc/nginx/nginx.conf
+	echo -e "\tsendfile_max_chunk 1m;" >> /etc/nginx/nginx.conf
+	echo -e "\tserver_tokens off;" >> /etc/nginx/nginx.conf
+	echo -e "\tserver {" >> /etc/nginx/nginx.conf
+	echo -e "\t\tlisten [::]:$PORT ssl http2;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tlisten $PORT ssl http2;" >> /etc/nginx/nginx.conf
+	echo -e "\t\troot /home/acidvegas/www;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tserver_name $HUB;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tcharset UTF-8;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tsatisfy all;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tallow 1.1.1.1; # Link 1" >> /etc/nginx/nginx.conf
+	echo -e "\t\tallow 2.2.2.2; # Link 2" >> /etc/nginx/nginx.conf
+	echo -e "\t\tallow 3.3.3.3; # Link 3" >> /etc/nginx/nginx.conf
+	echo -e "\t\tallow 4.4.4.4; # Link 4" >> /etc/nginx/nginx.conf
+	echo -e "\t\tdeny all;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tauth_basic \"Restricted\";" >> /etc/nginx/nginx.conf
+	echo -e "\t\tauth_basic_user_file /etc/nginx/.htpasswd;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tssl_certificate /etc/letsencrypt/live/$HUB/fullchain.pem;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tssl_certificate_key /etc/letsencrypt/live/$HUB/privkey.pem;" >> /etc/nginx/nginx.conf
+	echo -e "\t\tssl_session_tickets off;" >> /etc/nginx/nginx.conf
+	echo "\t}" >> /etc/nginx/nginx.conf
+	echo "}" >> /etc/nginx/nginx.conf
+	printf "$USERNAME:$(openssl passwd -apr1 $PASSWORD)\n" > /etc/nginx/.htpasswd
+	systemctl enable nginx && systemctl start nginx
+}
+
+setup_certbot() {
+	certbot certonly --standalone -d $HUB -m admin@supernets.org
+	echo -e "[Unit]\nDescription=cerbot renewal\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/certbot renew -n --quiet --agree-tos --deploy-hook systemctl restart nginx" > /etc/systemd/system/certbot.service
+	echo -e "[Unit]\nDescription=cerbot renewal timer\n\n[Timer]\nOnCalendar=0/12:00:00\nRandomizedDelaySec=1h\nPersistent=true\n\n[Install]\nWantedBy=timers.target" > /etc/systemd/system/certbot.timer
+	systemctl enable certbot.timer && systemctl start certbot.timer
+}
+
+setup_home
+setup_nginx
+setup_certbot
+echo "Remote include: https://$USERNAME:$PASSWORD@$HUB:$PORT/"

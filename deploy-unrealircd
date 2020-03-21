@@ -24,6 +24,8 @@ deploy() {
 	SPKI=$($UNREAL/unrealircd spkifp | sed -n 5p)
 	echo -e "\nAdd the following line into the hub\'s links.conf file for this link:\n$SPKI"
 	$UNREAL/unrealircd start &
+	#crontab -l | { cat; echo "*/5 * * * * /home/ak/unrealircd/unrealircd croncheck"; } | crontab -
+	#crontab -l | { cat; echo "@reboot /home/ak/unrealircd/unrealircd croncheck";     } | crontab -
 }
 
 #todo: fix this mess
