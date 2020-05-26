@@ -1,16 +1,7 @@
 #!/bin/sh
-
-# ./unreal gencloak
-# gpg --keyserver keys.gnupg.net --recv-keys 0xA7A21B0A108FF4A9
-# wget https://www.unrealircd.org/downloads/unrealircd-5.0.0-alpha3.tar.gz.asc
-# gpg --verify unrealircd-5.0.0-alpha3.tar.gz.asc unrealircd-5.0.0-alpha3.tar.gz
-
-#set -xev
-
-CURRENT='5.0.3.1'
-BACKUP=$HOME/unrealircd.backup
-SOURCE=$HOME/unrealircd.source
 UNREAL=$HOME/unrealircd
+BACKUP=$UNREAL.backup
+SOURCE=$UNREAL.source
 
 deploy() {
 	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
@@ -19,61 +10,30 @@ deploy() {
 	read -p "Link Name: " NAME
 	SID=$(cat /dev/urandom | tr -dc '0-9' | fold -w 256 | head -n 1 | head --bytes 1)$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 2 | head -n 1)
 	read -p "Remote Include: " REMOTE
-	for item in aliases badwords except help ircd modules opers spamfilter; do echo $REMOTE/$item.conf >> $UNREAL/conf/unrealircd.conf; done
+	for item in badwords except ircd modules opers spamfilter; do echo $REMOTE/$item.conf >> $UNREAL/conf/unrealircd.conf; done
 	echo "me { name \"$NAME.supernets.org\"; info \"SuperNETs IRC Network\"; sid $SID; }" >> $UNREAL/conf/unrealircd.conf
 	SPKI=$($UNREAL/unrealircd spkifp | sed -n 5p)
 	echo -e "\nAdd the following line into the hub\'s links.conf file for this link:\n$SPKI"
 	$UNREAL/unrealircd start &
-	#crontab -l | { cat; echo "*/5 * * * * /home/ak/unrealircd/unrealircd croncheck"; } | crontab -
-	#crontab -l | { cat; echo "@reboot /home/ak/unrealircd/unrealircd croncheck";     } | crontab -
+	crontab -l | { cat; echo "*/5 * * * * $HOME/unrealircd/unrealircd croncheck"; } | crontab -
+	crontab -l | { cat; echo "@reboot $HOME/unrealircd/unrealircd croncheck";     } | crontab -
 }
 
-#todo: fix this mess
 latest() {
-	local LATEST=$(curl -s https://www.unrealircd.org/downloads/list.json | sed -e 's/[{}]/''/g' | awk -v RS=',"' -F: '/^version/ {print $2}' | sed 's/\(^"\|"$\)//g')
-	[ "$LATEST" != "$CURRENT" ] && echo "new version available: $LATEST"
+	local CURRENT=$($UNREAL/unrealircd version | awk '{print $NF}')
+	local LATEST=$(curl -s https://www.unrealircd.org/downloads/list.json | jq '[.[]][1].Stable.type')
+	[ $CURRENT != $LATEST ] && echo "new version available: $LATEST"
 }
 
 update() {
-	#[ ! -z $(screen -ls | grep ircdwatchdog) ] && screen -S ircdwatchdog -X quit
-	#[ ! -z $(abduco     | grep ircdwatchdog) ] && pkill -9 $(abduco | grep ircdwatchdog | awk '{print $4}')
 	mkdir $BACKUP && cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/tls/server.*.pem $BACKUP
 	$UNREAL/unrealircd stop && rm -rf $UNREAL
 	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
 	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install && cd $HOME && rm -rf $SOURCE
-	rm $UNREAL/conf/*.conf && mv $BACKUP/*.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/tls && rm -r $BACKUP
+	rm $UNREAL/conf/*.conf && mv $BACKUP/unrealircd.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/tls && rm -r $BACKUP
 	$UNREAL/unrealircd start
-	#watchdog
 }
 
-update_source() {
-	wget -O $SOURCE.tar.gz https://www.unrealircd.org/downloads/unrealircd-latest.tar.gz
-	tar -xvf $SOURCE.tar.gz --one-top-level --strip-components=1 && rm $SOURCE.tar.gz
-	sed -i 's/NICKNAMEHISTORYLENGTH="2000"/NICKNAMEHISTORYLENGTH="100"/g' $SOURCE/Config
-	sed -i 's/REMOTEINC=""/REMOTEINC="1"/g' $SOURCE/Config
-	sed -i 's/PREFIXAQ="1"/PREFIXAQ="0"/g' $SOURCE/Config
-	sed -i 's/SHOWLISTMODES="1"/SHOWLISTMODES="0"/g' $SOURCE/Config
-	sed -i 's_\t$(INSTALL) -m 0600 doc/conf/*.default.conf @CONFDIR@_$(INSTALL) -m 0600 doc/conf/*.conf @CONFDIR@_g' $SOURCE/Makefile.in
-	sed -i 's_\t$(INSTALL) -m 0600 doc/conf/*.optional.conf @CONFDIR@_$(INSTALL) -m 0600 doc/conf/*.motd @CONFDIR@_g' $SOURCE/Makefile.in
-	sed -i '177,192d' $SOURCE/Makefile.in          # https://github.com/unrealircd/unrealircd/blob/unreal50/Makefile.in          |
-	sed -i '279,296d' $SOURCE/src/modules/sajoin.c # https://github.com/unrealircd/unrealircd/blob/unreal50/src/modules/sajoin.c | Note: These line numbers may change with updates!
-	sed -i '162,177d' $SOURCE/src/modules/sapart.c # https://github.com/unrealircd/unrealircd/blob/unreal50/src/modules/sapart.c |
-	sed -i 's/0.organizationName_default      = IRC geeks/0.organizationName_default      = SuperNETs/g' $SOURCE/extras/tls.cnf
-	sed -i 's;//#undef FAKELAG_CONFIGURABLE;#define FAKELAG_CONFIGURABLE;g' $SOURCE/include/config.h
-	rm -r $SOURCE/doc/conf/aliases $SOURCE/doc/conf/examples *.conf
-	cp $HOME/dev/git/supernets/unrealircd/doc/conf/* $SOURCE/doc/conf/
-	cp $SOURCE/doc/conf/help/help.conf $SOURCE/doc/conf/help.conf && rm -r $SOURCE/doc/conf/help/
-}
-
-watchdog() {
-	if command -v abduco >/dev/null 2>&1; then
-		abduco -fnr ircdwatchdog     bash -c "while true; do [ ! -f $HOME/unrealircd/data/unrealircd.pid ] && $HOME/unrealircd/unrealircd start; sleep 15; done"
-	elif command -v screen >/dev/null 2>&1; then
-		screen -S   ircdwatchdog -dm bash -c "while true; do [ ! -f $HOME/unrealircd/data/unrealircd.pid ] && $HOME/unrealircd/unrealircd start; sleep 15; done"
-	fi
-}
-
-[ $1 = "deploy"   ] && deploy   && exit 1
-[ $1 = "latest"   ] && latest   && exit 1
-[ $1 = "update"   ] && update   && exit 1
-[ $1 = "watchdog" ] && watchdog && exit 1
+[ $1 = "deploy" ] && deploy && exit 1
+[ $1 = "latest" ] && latest && exit 1
+[ $1 = "update" ] && update && exit 1
