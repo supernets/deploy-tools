@@ -26,11 +26,11 @@ latest() {
 }
 
 update() {
-	mkdir $BACKUP && cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/tls/server.*.pem $BACKUP
+	mkdir $BACKUP && cp $UNREAL/conf/unrealircd.conf $BACKUP && cp $UNREAL/conf/tls/*.pem $BACKUP && cp $UNREAL/data/*.db $BACKUP
 	$UNREAL/unrealircd stop && rm -rf $UNREAL
 	git clone --depth 1 https://github.com/supernets/unrealircd.git $SOURCE
 	cd $SOURCE && echo -e "\n" | ./Config -nointro && make && make install && cd $HOME && rm -rf $SOURCE
-	rm $UNREAL/conf/*.conf && mv $BACKUP/unrealircd.conf $UNREAL/conf/ && mv $BACKUP/server.*.pem $UNREAL/conf/tls && rm -r $BACKUP
+	rm $UNREAL/conf/*.conf && mv $BACKUP/unrealircd.conf $UNREAL/conf/ && mv $BACKUP/*.pem $UNREAL/conf/tls && mv $BACKUP/*.db $UNREAL/data && rm -r $BACKUP
 	$UNREAL/unrealircd start
 }
 
